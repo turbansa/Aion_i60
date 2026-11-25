@@ -105,15 +105,16 @@ async function drainIdle(ms){ var t=Date.now()+ms, last=T.buf.length;
   var out=T.buf; T.buf=""; return out; }
 /* BUILD-ID — печатается в лог при подключении, чтобы точно знать, какая версия
    кода открыта в браузере (Pages кэширует до 10 мин — смотри этот тег при сомнениях) */
-const BUILD = "build 3f37dc4 · FIFO-queue + pending-78 + ISO-TP + off-fullchain";
+const BUILD = "build 3f37dc4 · FIFO-queue + pending-78 + ISO-TP + off-fullchain + clean-disconnect";
 /* шлюз — FIFO-очередь: команды (рутина, keepalive, кнопки) сериализуются вместо
    взаимных отказов «шлюз занят» (race 00:22:38: keepalive перехватил порт у рутины) */
 var G = Promise.resolve();
 function command(txt,timeout){
   var run = async function(){
-    if(!T.connected) throw new Error("нет соединения");
+    if(!T.connected || !T.writer) throw new Error("нет соединения");
     T.busy=true;
     try { await drainIdle(80); T.buf="";
+      if(!T.connected || !T.writer) throw new Error("нет соединения"); // закрытие застало в очереди
       await T.writer.write(new TextEncoder().encode(txt+"\r"));
       var t0=Date.now();
       while(Date.now()-t0 < (timeout||3000)){ await sleep(50);
@@ -201,7 +202,10 @@ async function connect(){
 }
 async function disconnect(ui){ T.connected=false; T.keepAlive=false;
   try{ if(T.reader) T.reader.cancel(); }catch(e){}
-  try{ if(T.writer){ T.writer.releaseLock(); } }catch(e){}
+  try{ if(T.writer){
+         try{ await G; }catch(_){}   // ждём опустения очереди команд
+         await sleep(120);           // хвост стартовавшей команды
+         T.writer.releaseLock(); } }catch(e){}
   try{ if(T.port) await T.port.close(); }catch(e){}
   T.port=null; if(ui) setConn("нет соединения"); enableBtns(false); }
 
