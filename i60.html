@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>i60 · ADB semi-auto (AE65 01/00 + AEB1 + 2B 00)</title>
+<title>i60 · UDS semi-auto (2B 00 инженерка + AEB1 USB-обновление)</title>
 <style>
 :root { --bg:#14171c; --fg:#d7dde6; --ok:#7ec27e; --err:#e08585; --dim:#8a93a0; --acc:#6ab0f3; }
 body { background:var(--bg); color:var(--fg); font:14px/1.5 ui-monospace,monospace; margin:0; padding:12px; }
@@ -31,12 +31,18 @@ button:disabled { opacity:0.4; }
 </div>
 <div class="row">
   <button id="bUsb"  class="danger" disabled>USB_Update (AEB1&nbsp;01)</button>
+</div>
+<div class="row">
+  <button id="bExit" disabled>Выйти из сессии (1001)</button>
+</div>
+<!-- Кнопки ADB скрыты (код функций сохранён, возвращаются по запросу):
+<div class="row">
   <button id="bAdb1" class="danger" disabled>ADB → usb1=1 (AE65&nbsp;01)</button>
 </div>
 <div class="row">
   <button id="bOff"  disabled>ADB → off (AE65&nbsp;00)</button>
-  <button id="bExit" disabled>Выйти из сессии (1001)</button>
 </div>
+-->
 <div id="log"></div>
 <div class="row">
  <small>Машина на «P», зажигание ON. 3E 00 — поддержание связи.
@@ -108,7 +114,7 @@ async function drainIdle(ms){ var t=Date.now()+ms, last=T.buf.length;
   var out=T.buf; T.buf=""; return out; }
 /* BUILD-ID — печатается в лог при подключении, чтобы точно знать, какая версия
    кода открыта в браузере (Pages кэширует до 10 мин — смотри этот тег при сомнениях) */
-const BUILD = "build 624bce5 · AEB1 resultMap: 00/01, причина через опрос 31 03 AE B1";
+const BUILD = "build fe5e16b · FIFO + pending-78 + ISO-TP + off-fullchain + clean-disconnect + usb1=1 + меню + AEB1";
 /* шлюз — FIFO-очередь: команды (рутина, keepalive, кнопки) сериализуются вместо
    взаимных отказов «шлюз занят» (race 00:22:38: keepalive перехватил порт у рутины) */
 var G = Promise.resolve();
@@ -340,14 +346,16 @@ async function vin(){ log("=== VIN (read-only)");
   var vin=""; for(var i=6;i<r.length;i+=2) vin+=String.fromCharCode(parseInt(r.substr(i,2),16));
   log("VIN: "+vin.trim(),"ok"); }
 
-function enableBtns(on){ for(var id of ["bMenu","bUsb","bAdb1","bOff","bVin","bExit"])
+function enableBtns(on){ for(var id of ["bMenu","bUsb","bVin","bExit"]) // bAdb1/bOff скрыты (заккомментированы в HTML)
     document.getElementById(id).disabled=!on; }
 document.getElementById("bConn").onclick=connect;
 document.getElementById("bExit").onclick=async function(){ try{ await uds("1001","50"); log("сессия закрыта (1001)","ok"); }catch(e){ log(e.message,"err"); } await disconnect(true); };
 document.getElementById("bMenu").onclick=function(){ if(!T.busy) menuRoutine().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
 document.getElementById("bUsb").onclick =function(){ if(!T.busy) usbUpdateRoutine().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
+/* ADB-кнопки скрыты вместе с обработчиками (функции adbRoutine/rollback сохранены):
 document.getElementById("bAdb1").onclick=function(){ if(!T.busy) adbRoutine("01").catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
 document.getElementById("bOff").onclick =function(){ if(!T.busy) rollback().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
+*/
 document.getElementById("bVin").onclick =function(){ if(!T.busy) vin().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
 </script>
 </body>
