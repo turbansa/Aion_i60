@@ -103,6 +103,9 @@ async function serialReadLoop(){ var dec=new TextDecoder();
 async function drainIdle(ms){ var t=Date.now()+ms, last=T.buf.length;
   while(Date.now()<t){ await sleep(60); if(T.buf.length!==last){ last=T.buf.length; t=Date.now()+ms; } }
   var out=T.buf; T.buf=""; return out; }
+/* BUILD-ID — печатается в лог при подключении, чтобы точно знать, какая версия
+   кода открыта в браузере (Pages кэширует до 10 мин — смотри этот тег при сомнениях) */
+const BUILD = "build 3f37dc4 · FIFO-queue + pending-78 + ISO-TP + off-fullchain";
 /* шлюз — FIFO-очередь: команды (рутина, keepalive, кнопки) сериализуются вместо
    взаимных отказов «шлюз занят» (race 00:22:38: keepalive перехватил порт у рутины) */
 var G = Promise.resolve();
@@ -192,7 +195,8 @@ async function connect(){
     await at("ATTP6");
     for(var j=0;j<INIT_POST.length;j++){ await at(INIT_POST[j]); }
     setConn("онлайн · "+found+" · HS-CAN → 72B/7AB");
-    enableBtns(true); log("подключено. Жми «ADB → usb0» — цепочка 1003→2701→2702→3E→рутина пройдёт сама.","ok");
+    enableBtns(true); log("○ "+BUILD,"ok");
+    log("подключено. Жми «ADB → usb0» — цепочка 1003→2701→2702→3E→рутина пройдёт сама.","ok");
   } catch(e){ setConn("ошибка: "+e.message); try{ await disconnect(false); }catch(_){}}
 }
 async function disconnect(ui){ T.connected=false; T.keepAlive=false;
