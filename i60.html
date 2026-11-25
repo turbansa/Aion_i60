@@ -114,7 +114,7 @@ async function drainIdle(ms){ var t=Date.now()+ms, last=T.buf.length;
   var out=T.buf; T.buf=""; return out; }
 /* BUILD-ID — печатается в лог при подключении, чтобы точно знать, какая версия
    кода открыта в браузере (Pages кэширует до 10 мин — смотри этот тег при сомнениях) */
-const BUILD = "build fe5e16b · FIFO + pending-78 + ISO-TP + off-fullchain + clean-disconnect + usb1=1 + меню + AEB1";
+const BUILD = "build 72fe083 · i60.html: VIN + инженерка (2B 00) + USB_Update (AEB1); ADB-кнопки скрыты (код сохранён)";
 /* шлюз — FIFO-очередь: команды (рутина, keepalive, кнопки) сериализуются вместо
    взаимных отказов «шлюз занят» (race 00:22:38: keepalive перехватил порт у рутины) */
 var G = Promise.resolve();
