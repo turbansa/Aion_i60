@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>i60 · ADB semi-auto (AE65 01/03/00 + 2B 00)</title>
+<title>i60 · ADB semi-auto (AE65 01/00 + AEB1 + 2B 00)</title>
 <style>
 :root { --bg:#14171c; --fg:#d7dde6; --ok:#7ec27e; --err:#e08585; --dim:#8a93a0; --acc:#6ab0f3; }
 body { background:var(--bg); color:var(--fg); font:14px/1.5 ui-monospace,monospace; margin:0; padding:12px; }
@@ -30,7 +30,7 @@ button:disabled { opacity:0.4; }
   <button id="bMenu" class="danger" disabled>Инженерное меню (2B&nbsp;00)</button>
 </div>
 <div class="row">
-  <button id="bAdb"  class="danger" disabled>ADB → usb1=3 (AE65&nbsp;03)</button>
+  <button id="bUsb"  class="danger" disabled>USB_Update (AEB1&nbsp;01)</button>
   <button id="bAdb1" class="danger" disabled>ADB → usb1=1 (AE65&nbsp;01)</button>
 </div>
 <div class="row">
@@ -260,6 +260,28 @@ async function menuRoutine(){
   r=await uds("31012B00","71012B");
   log("$$$ УСПЕХ: "+r+" — меню должно открыться на экране ГУ (Syncore KitchenSink)","ok");
 }
+async function usbUpdateRoutine(){
+  /* 31 01 AE B1 01 — заказ USB-обновления с флешки (VHAL 561001373 → UsbUpdateHMI).
+     Полная цепочка, как у ADB-рутин: 1003→2701→2702→3E→рутина.
+     Машина ищет каталог USB_GAC_<productName> на флешке и открывает UpdateActivity;
+     пакет должен быть подписан GAC (иначе отвергнет). Ответ: 71 01 AE B1 <rcode>.
+     Результат запроса: AEB1 03 (561001374), прогресс установки: AEB2 01 (561001375). */
+  log("=== цепочка USB_Update → 31 01 AE B1 01 ");
+  log("[1/5] 10 03 — расширенная сессия");
+  var r=await uds("1003","5003");
+  log("[2/5] 27 01 — seed");
+  r=await uds("2701","6701");
+  var hex=r.slice(4,12);
+  log("  seed = "+hex);
+  var key=seed2key(hex);
+  log("[3/5] 27 02 — ключ "+key);
+  await uds("2702"+key,"6702");
+  startKeepAlive();
+  log("[4/5] 3E 00 — keepalive пошёл");
+  log("[5/5] 31 01 AE B1 01 — заказ USB-обновления","tx");
+  r=await uds("3101AEB101","7101AEB1");
+  log("$$$ УСПЕХ: "+r+" — заказ принят. Если на флешке есть USB_GAC_* — ГУ откроет UpdateActivity; смотрим resultCode в ответе","ok");
+}
 async function rollback(){
   /* как в заводском сценарии (bz3x-лог 00:12): выключение — ТОЖЕ полная цепочка
      1003→2701→2702→AE65 00. Отсылка в старой сессии давала 7F 31 7F.
@@ -292,12 +314,12 @@ async function vin(){ log("=== VIN (read-only)");
   var vin=""; for(var i=6;i<r.length;i+=2) vin+=String.fromCharCode(parseInt(r.substr(i,2),16));
   log("VIN: "+vin.trim(),"ok"); }
 
-function enableBtns(on){ for(var id of ["bMenu","bAdb","bAdb1","bOff","bVin","bExit"])
+function enableBtns(on){ for(var id of ["bMenu","bUsb","bAdb1","bOff","bVin","bExit"])
     document.getElementById(id).disabled=!on; }
 document.getElementById("bConn").onclick=connect;
 document.getElementById("bExit").onclick=async function(){ try{ await uds("1001","50"); log("сессия закрыта (1001)","ok"); }catch(e){ log(e.message,"err"); } await disconnect(true); };
 document.getElementById("bMenu").onclick=function(){ if(!T.busy) menuRoutine().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
-document.getElementById("bAdb").onclick =function(){ if(!T.busy) adbRoutine("03").catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
+document.getElementById("bUsb").onclick =function(){ if(!T.busy) usbUpdateRoutine().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
 document.getElementById("bAdb1").onclick=function(){ if(!T.busy) adbRoutine("01").catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
 document.getElementById("bOff").onclick =function(){ if(!T.busy) rollback().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
 document.getElementById("bVin").onclick =function(){ if(!T.busy) vin().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
