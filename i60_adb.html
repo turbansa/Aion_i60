@@ -39,8 +39,8 @@ button:disabled { opacity:0.4; }
 </div>
 <div id="log"></div>
 <div class="row">
- <small>Отдельный терминал ноутбука: <b>sudo dmesg -wT</b> (ждём idVendor=18d1, idProduct=4ee7) и
- <b>nc -vz 10.1.0.79 5555</b>. Машина на «P», зажигание ON. Спам рутинами запрещён: NRC 0x36/0x37 — cooldown 2–3 мин.</small>
+ <small>Машина на «P», зажигание ON. 3E 00 — поддержание связи.
+ Спам рутинами запрещён: NRC 0x36/0x37 — cooldown 2–3 мин (выкл зажигания на 2–3 мин).</small>
 </div>
 <script>
 "use strict";
@@ -236,7 +236,7 @@ async function adbRoutine(sub){
   log("[3/5] 27 02 — ключ "+key);
   await uds("2702"+key,"6702");
   startKeepAlive();
-  log("[4/5] 3E 00 — keepalive пошёл");
+  log("[4/5] 3E 00 — поддержание связи (keepalive)");
   log("[5/5] 31 01 AE 65 "+sub+" — рутина ADB","tx");
   r=await uds("3101AE65"+sub,"7101AE65");
   log("$$$ УСПЕХ: 71 01 AE 65 00 — scos.adb.usb1=\""+(+sub)+"\" записан. Ноут: dmesg ждёт 18d1:4ee7 / nc 10.1.0.79 5555","ok");
@@ -255,7 +255,7 @@ async function menuRoutine(){
   log("[3/5] 27 02 — ключ "+key);
   await uds("2702"+key,"6702");
   startKeepAlive();
-  log("[4/5] 3E 00 — keepalive пошёл");
+  log("[4/5] 3E 00 — поддержание связи (keepalive)");
   log("[5/5] 31 01 2B 00 — рутина инженерного меню","tx");
   r=await uds("31012B00","71012B");
   log("$$$ УСПЕХ: "+r+" — меню должно открыться на экране ГУ (Syncore KitchenSink)","ok");
@@ -277,10 +277,19 @@ async function usbUpdateRoutine(){
   log("[3/5] 27 02 — ключ "+key);
   await uds("2702"+key,"6702");
   startKeepAlive();
-  log("[4/5] 3E 00 — keepalive пошёл");
+  log("[4/5] 3E 00 — поддержание связи (keepalive)");
   log("[5/5] 31 01 AE B1 01 — заказ USB-обновления","tx");
   r=await uds("3101AEB101","7101AEB1");
-  log("$$$ УСПЕХ: "+r+" — заказ принят. Если на флешке есть USB_GAC_* — ГУ откроет UpdateActivity; смотрим resultCode в ответе","ok");
+  var rc=r.slice(8,10); // 71 01 AE B1 <resultCode>
+  if(rc===""||rc==="00"){
+    log("$$$ УСПЕХ: "+r+" — заказ принят; на экране ГУ должно открыться окно обновления (UpdateActivity)","ok");
+  } else {
+    var why={"01":"Гу не сумел определить продукт с флешки (нет вставленной флешки или она пустая)",
+             "02":"каталог/файл USB_GAC_* на флешке не найден",
+             "03":"список сервисных пакетов на флешке пуст"}[rc]||"причина не расшифрована — пришли лог";
+    log("!!! АПДЕЙТЕР НЕ ЗАПУСТИЛСЯ: resultCode="+rc+" ("+why+")","err");
+    log("    → вставь в ГУ USB-флешку с пакетом обновления (каталог USB_GAC_<имя>, подпись GAC) и нажми кнопку снова","ok");
+  }
 }
 async function rollback(){
   /* как в заводском сценарии (bz3x-лог 00:12): выключение — ТОЖЕ полная цепочка
@@ -298,7 +307,7 @@ async function rollback(){
     log("[3/5] 27 02 — ключ "+key);
     await uds("2702"+key,"6702");
     startKeepAlive();
-    log("[4/5] 3E 00 — keepalive пошёл");
+    log("[4/5] 3E 00 — поддержание связи (keepalive)");
     log("[5/5] 31 01 AE 65 00 — выключение ADB","tx");
     await uds("3101AE6500","7101AE65");
     log("$$$ ADB → off OK — гаджет снят","ok");
