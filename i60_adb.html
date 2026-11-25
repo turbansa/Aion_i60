@@ -105,7 +105,7 @@ async function drainIdle(ms){ var t=Date.now()+ms, last=T.buf.length;
   var out=T.buf; T.buf=""; return out; }
 /* BUILD-ID — печатается в лог при подключении, чтобы точно знать, какая версия
    кода открыта в браузере (Pages кэширует до 10 мин — смотри этот тег при сомнениях) */
-const BUILD = "build 3f37dc4 · FIFO-queue + pending-78 + ISO-TP + off-fullchain + clean-disconnect";
+const BUILD = "build 9189970 · FIFO + pending-78 + ISO-TP + off-fullchain + clean-disconnect + usb1-значения";
 /* шлюз — FIFO-очередь: команды (рутина, keepalive, кнопки) сериализуются вместо
    взаимных отказов «шлюз занят» (race 00:22:38: keepalive перехватил порт у рутины) */
 var G = Promise.resolve();
