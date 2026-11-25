@@ -221,13 +221,33 @@ async function adbRoutine(sub){
   log("$$$ УСПЕХ: 71 01 AE 65 00 — scos.adb.usb"+
       (sub==="01"?"1":"0")+" включён. Ноут: dmesg ждёт 18d1:4ee7 / nc 10.1.0.79 5555","ok");
 }
-async function rollback(){ log("=== откат: 31 01 AE 65 00");
-  try{ await uds("3101AE6500","7101AE65"); log("откат OK — ADB выключен","ok"); }
+async function rollback(){
+  /* как в заводском сценарии (bz3x-лог 00:12): выключение — ТОЖЕ полная цепочка
+     1003→2701→2702→AE65 00. Отсылка в старой сессии давала 7F 31 7F.
+     При отказе — зажигание off 1–2 мин: пропы non-persistent, ADB закроется сам. */
+  log("=== ADB → off: полная цепочка + 31 01 AE 65 00");
+  var sub="00";
+  try {
+    log("[1/5] 10 03 — расширенная сессия");
+    await uds("1003","5003");
+    log("[2/5] 27 01 — seed");
+    var r=await uds("2701","6701");
+    var hex=r.slice(4,12); log("  seed = "+hex);
+    var key=seed2key(hex);
+    log("[3/5] 27 02 — ключ "+key);
+    await uds("2702"+key,"6702");
+    startKeepAlive();
+    log("[4/5] 3E 00 — keepalive пошёл");
+    log("[5/5] 31 01 AE 65 00 — выключение ADB","tx");
+    await uds("3101AE6500","7101AE65");
+    log("$$$ ADB → off OK — гаджет снят","ok");
+  }
   catch(e){ if(/7F 7F/.test(e.message)){
-      log("NRC 7F: sub 00 не доступна в активной сессии (в этой прошивке завод, похоже, не дал off-рутину).",
+      log("NRC 7F: рутина off отклонена сервером. Это НЕ страшно: пропы non-persistent —",
           "err");
-      log("Это НЕ страшно: ADB-пропы non-persistent — выключи зажигание на 1–2 мин, ADB закроется сам.","ok");
-    } else throw e; } }
+      log("выключи зажигание на 1–2 мин — ADB закроется сам.","ok");
+    } else throw e; }
+}
 async function vin(){ log("=== VIN (read-only)");
   var r=await uds("22F190","62F190");
   var vin=""; for(var i=6;i<r.length;i+=2) vin+=String.fromCharCode(parseInt(r.substr(i,2),16));
