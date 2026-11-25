@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>i60 · ADB semi-auto (AE65 01/03/00)</title>
+<title>i60 · ADB semi-auto (AE65 01/03/00 + 2B 00)</title>
 <style>
 :root { --bg:#14171c; --fg:#d7dde6; --ok:#7ec27e; --err:#e08585; --dim:#8a93a0; --acc:#6ab0f3; }
 body { background:var(--bg); color:var(--fg); font:14px/1.5 ui-monospace,monospace; margin:0; padding:12px; }
@@ -25,6 +25,9 @@ button:disabled { opacity:0.4; }
 <div class="row">
   <button id="bConn" class="warn">Подключить адаптер</button>
   <button id="bVin"  class="warn" disabled>VIN (read-only)</button>
+</div>
+<div class="row">
+  <button id="bMenu" class="danger" disabled>Инженерное меню (2B&nbsp;00)</button>
 </div>
 <div class="row">
   <button id="bAdb"  class="danger" disabled>ADB → usb1=3 (AE65&nbsp;03)</button>
@@ -238,6 +241,25 @@ async function adbRoutine(sub){
   r=await uds("3101AE65"+sub,"7101AE65");
   log("$$$ УСПЕХ: 71 01 AE 65 00 — scos.adb.usb1=\""+(+sub)+"\" записан. Ноут: dmesg ждёт 18d1:4ee7 / nc 10.1.0.79 5555","ok");
 }
+async function menuRoutine(){
+  /* 31 01 2B 00 — открытие Syncore KitchenSink (инженерное меню на экране ГУ).
+     Полная цепочка, как у ADB-рутин: 1003→2701→2702→3E→рутина (иначе 7F 31 7F). */
+  log("=== цепочка Инженерное меню → 31 01 2B 00 ");
+  log("[1/5] 10 03 — расширенная сессия");
+  var r=await uds("1003","5003");
+  log("[2/5] 27 01 — seed");
+  r=await uds("2701","6701");
+  var hex=r.slice(4,12);
+  log("  seed = "+hex);
+  var key=seed2key(hex);
+  log("[3/5] 27 02 — ключ "+key);
+  await uds("2702"+key,"6702");
+  startKeepAlive();
+  log("[4/5] 3E 00 — keepalive пошёл");
+  log("[5/5] 31 01 2B 00 — рутина инженерного меню","tx");
+  r=await uds("31012B00","71012B");
+  log("$$$ УСПЕХ: "+r+" — меню должно открыться на экране ГУ (Syncore KitchenSink)","ok");
+}
 async function rollback(){
   /* как в заводском сценарии (bz3x-лог 00:12): выключение — ТОЖЕ полная цепочка
      1003→2701→2702→AE65 00. Отсылка в старой сессии давала 7F 31 7F.
@@ -270,10 +292,11 @@ async function vin(){ log("=== VIN (read-only)");
   var vin=""; for(var i=6;i<r.length;i+=2) vin+=String.fromCharCode(parseInt(r.substr(i,2),16));
   log("VIN: "+vin.trim(),"ok"); }
 
-function enableBtns(on){ for(var id of ["bAdb","bAdb1","bOff","bVin","bExit"])
+function enableBtns(on){ for(var id of ["bMenu","bAdb","bAdb1","bOff","bVin","bExit"])
     document.getElementById(id).disabled=!on; }
 document.getElementById("bConn").onclick=connect;
 document.getElementById("bExit").onclick=async function(){ try{ await uds("1001","50"); log("сессия закрыта (1001)","ok"); }catch(e){ log(e.message,"err"); } await disconnect(true); };
+document.getElementById("bMenu").onclick=function(){ if(!T.busy) menuRoutine().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
 document.getElementById("bAdb").onclick =function(){ if(!T.busy) adbRoutine("03").catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
 document.getElementById("bAdb1").onclick=function(){ if(!T.busy) adbRoutine("01").catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
 document.getElementById("bOff").onclick =function(){ if(!T.busy) rollback().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
