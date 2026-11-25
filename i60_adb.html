@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>i60 · ADB semi-auto (AE65 01/03/00)</title>
+<style>
+:root { --bg:#14171c; --fg:#d7dde6; --ok:#7ec27e; --err:#e08585; --dim:#8a93a0; --acc:#6ab0f3; }
+body { background:var(--bg); color:var(--fg); font:14px/1.5 ui-monospace,monospace; margin:0; padding:12px; }
+button { font:inherit; padding:8px 14px; margin:4px 4px 4px 0; border:1px solid #3a4250;
+         background:#1d222b; color:var(--fg); border-radius:8px; }
+button.primary { background:#23405e; border-color:#3d6aa0; }
+button.danger  { background:#5e2323; border-color:#a03d3d; }
+button:disabled { opacity:0.4; }
+#log { background:#0d1014; border:1px solid #2a3140; border-radius:8px; padding:10px;
+       height:52vh; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin-top:8px; }
+.t { color:var(--dim); } .ok { color:var(--ok); } .err { color:var(--err); } .tx { color:var(--acc); }
+.row { margin:2px 0; }
+#conn { padding:4px 0 8px; color:var(--dim); }
+</style>
+</head>
+<body>
+<div id="conn">нет соединения</div>
+<div class="row">
+  <button id="bConn" class="primary">Подключить адаптер</button>
+  <button id="bAdb"  class="primary" disabled>ADB → usb0 (AE65&nbsp;03)</button>
+  <button id="bAdb1" disabled>ADB → usb1 (AE65&nbsp;01)</button>
+  <button id="bOff"  class="danger" disabled>Откат (AE65&nbsp;00)</button>
+  <button id="bVin"  disabled>VIN (read-only)</button>
+  <button id="bExit" disabled>Выйти из сессии (1001)</button>
+</div>
+<div id="log"></div>
+<div class="row">
+ <small>Отдельный терминал ноутбука: <b>sudo dmesg -wT</b> (ждём idVendor=18d1, idProduct=4ee7) и
+ <b>nc -vz 10.1.0.79 5555</b>. Машина на «P», зажигание ON. Спам рутинами запрещён: NRC 0x36/0x37 — cooldown 2–3 мин.</small>
+</div>
+<script>
+"use strict";
+/* ===== AES-128 seed2key — дословный порт из tool.html (алгоритм/ключ из прошивки,
+   проверен на FIPS-197 и на живом эталоне 673F3D65 -> 7432B510) ===== */
+var SBOX = [0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
+0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
+0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,
+0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
+0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,
+0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
+0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,
+0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
+0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,
+0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
+0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,
+0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
+0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,
+0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
+0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
+0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16];
+var RCON = [0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1b,0x36];
+// КЛЮЧ: для i60 (HS-CAN, 7AB) уровень 1 — как в верифицированном логе
+var AES_KEY = [0xc3,0xd5,0xcf,0x2c,0xa7,0x61,0xe6,0x41,0xa7,0x31,0x28,0x35,0xb2,0x4b,0x57,0x5e];
+function xt(a){ return (a & 0x80 ? (a<<1)^0x1b : a<<1) & 0xff; }
+function exKey(k){ var w=[],i,j; for(i=0;i<4;i++) w.push([k[i*4],k[i*4+1],k[i*4+2],k[i*4+3]]);
+  for(i=4;i<44;i++){ var t=w[i-1].slice(); if(i%4===0){ t=[t[1],t[2],t[3],t[0]];
+    t=[SBOX[t[0]],SBOX[t[1]],SBOX[t[2]],SBOX[t[3]]]; t[0]^=RCON[i/4-1]; }
+    var p=w[i-4],r=[]; for(j=0;j<4;j++) r.push(p[j]^t[j]); w.push(r);} return w; }
+function encBlk(key,b){ var w=exKey(key),c,r,st=[],rnd;
+  for(c=0;c<4;c++){var col=[];for(r=0;r<4;r++)col.push(b[r+4*c]^w[c][r]);st.push(col);}
+  for(rnd=1;rnd<=10;rnd++){ for(c=0;c<4;c++)for(r=0;r<4;r++)st[c][r]=SBOX[st[c][r]];
+    var ns=[]; for(c=0;c<4;c++){var m=[]; for(r=0;r<4;r++)m.push(st[(c+r)%4][r]); ns.push(m);} st=ns;
+    if(rnd!==10){ var mo=[]; for(c=0;c<4;c++){var a0=st[c][0],a1=st[c][1],a2=st[c][2],a3=st[c][3];
+      mo.push([xt(a0)^xt(a1)^a1^a2^a3, a0^xt(a1)^xt(a2)^a2^a3,
+               a0^a1^xt(a2)^xt(a3)^a3, xt(a0)^a0^a1^a2^xt(a3)]);} st=mo; }
+    for(c=0;c<4;c++)for(r=0;r<4;r++)st[c][r]^=w[rnd*4+c][r]; }
+  var o=[]; for(c=0;c<4;c++)for(r=0;r<4;r++)o.push(st[c][r]); return o; }
+function seed2key(seedHex){ var s=seedHex.replace(/[^0-9a-fA-F]/g,"").toUpperCase();
+  if(s.length!==8) throw new Error("seed должен быть 4 байта (8 hex), получен: "+seedHex);
+  var seed=[parseInt(s.substr(0,2),16),parseInt(s.substr(2,2),16),
+            parseInt(s.substr(4,2),16),parseInt(s.substr(6,2),16)];
+  var ct=encBlk(AES_KEY, seed.concat([1,1,1,1,1,1,1,1,1,1,1,1]));
+  var k=[(ct[12]^ct[3])^(ct[15]^ct[0]), (ct[13]^ct[2])^(ct[14]^ct[1]),
+         ct[14]^ct[1], ct[15]^ct[0]];
+  return k.map(function(b){return ("0"+b.toString(16)).slice(-2);}).join("").toUpperCase(); }
+
+/* ===== лог ===== */
+function log(msg, cls){ var d=document.createElement("div"); if(cls)d.className=cls;
+  d.textContent="["+new Date().toLocaleTimeString()+"] "+msg;
+  document.getElementById("log").appendChild(d);
+  document.getElementById("log").scrollTop=1e9; }
+function setConn(t){ document.getElementById("conn").textContent=t; }
+function sleep(ms){ return new Promise(function(r){setTimeout(r,ms);}); }
+
+/* ===== транспорт: Web Serial + ELM327 (как в tool.html) ===== */
+var T = { port:null, reader:null, writer:null, connected:false, buf:"", busy:false,
+          keepAlive:false, kaBusy:false };
+function bytesToText(b){ return new TextDecoder().decode(b); }
+async function serialReadLoop(){ var dec=new TextDecoder();
+  try { while(T.connected){ var v=await T.reader.read(); if(v.done)break;
+    T.buf += dec.decode(v.value); } } catch(e){} }
+async function drainIdle(ms){ var t=Date.now()+ms, last=T.buf.length;
+  while(Date.now()<t){ await sleep(60); if(T.buf.length!==last){ last=T.buf.length; t=Date.now()+ms; } }
+  var out=T.buf; T.buf=""; return out; }
+async function command(txt,timeout){ if(T.busy) throw new Error("шлюз занят");
+  T.busy=true;
+  try { await drainIdle(80); T.buf="";
+    await T.writer.write(new TextEncoder().encode(txt+"\r"));
+    var t0=Date.now();
+    while(Date.now()-t0 < (timeout||3000)){ await sleep(50);
+      if(/>/.test(T.buf.trim().slice(-1))) break; }
+    var out=T.buf; T.buf=""; return out;
+  } finally { T.busy=false; } }
+function atOk(txt){ return /OK/.test(txt); }
+async function at(cmd,timeout){ var t=await command(cmd,timeout||2000); if(!atOk(t))
+  throw new Error(cmd+": ожидался OK, получено '"+t.trim().replace(/\s+/g," ")+"'"); }
+// собираем UDS-ответ: выбрасываем заголовки/мусор, склеиваем hex
+function decodeUds(txt){ var out="", lines=txt.split(/[\r\n]+/);
+  for(var i=0;i<lines.length;i++){ var ln=lines[i].replace(/>/g,"").trim(); if(!ln) continue;
+    if(/^AT|^SEARCH|^BUS|NO DATA|CAN ERROR|UNABLE|STOPPED|ERROR|\?$|^OK$/.test(ln)) continue;
+    ln=ln.replace(/^[0-9A-F]{3}[:\s]*/,"");           // заголовок 7AB / 07AB
+    var toks=ln.match(/[0-9A-Fa-f]{2}/g); if(toks) out+=toks.join("").toUpperCase(); }
+  return out; }
+async function uds(payload,expect){ var t=await command(payload.toUpperCase(),4000);
+  var d=decodeUds(t);
+  log("  -> "+(d||"(пусто)"), d.indexOf("7F")===0 ? "err" : "ok");
+  if(d.indexOf("7F")===0) throw new Error(payload+": 7F "+d.slice(4)+"");
+  if(expect && d.indexOf(expect.toUpperCase())!==0)
+    throw new Error(payload+": ожидался "+expect+", получен "+(d||"(пусто)"));
+  return d; }
+
+const INIT_PRE = ["ATE0","ATL0","ATH1","ATS1","ATR1","ATM0"];
+const INIT_POST = ["ATSH72B","ATCRA7AB","ATFCSH72B","ATFCSD300014","ATFCSM1"];
+
+async function connect(){
+  if(!("serial" in navigator)){ setConn("Web Serial нет — нужен Chrome/Chromium"); return; }
+  try {
+    setConn("выбор порта…");
+    var port = await navigator.serial.requestPort();
+    var bauds=[38400,115200,57600,9600,230400], found=null;
+    for(var bi=0;bi<bauds.length;bi++){
+      try { await port.open({baudRate:bauds[bi],dataBits:8,stopBits:1,parity:"none",
+                             flowControl:"none",bufferSize:4096}); } catch(e){ continue; }
+      T.port=port; T.connected=true;
+      T.writer=port.writable.getWriter(); T.reader=port.readable.getReader();
+      serialReadLoop();
+      try { var t=await command("ATI",1500); if(t.indexOf("ELM")>=0||t.indexOf("STN")>=0||/OK/.test(t)){
+              found=bauds[bi]; log("адаптер: "+t.trim().split(/\r?\n/)[0]); break; } } catch(e){}
+      await disconnect(false);
+    }
+    if(!found) throw new Error("адаптер не отвечает на ATI");
+    log("бод: "+found);
+    for(var i=0;i<INIT_PRE.length;i++){ await at(INIT_PRE[i]); }
+    log("шину выбираю: HS-CAN 500k → ГУ (ATTP6, 7AB)");
+    await at("ATPC");
+    await at("ATTP6");
+    for(var j=0;j<INIT_POST.length;j++){ await at(INIT_POST[j]); }
+    setConn("онлайн · "+found+" · HS-CAN → 72B/7AB");
+    enableBtns(true); log("подключено. Жми «ADB → usb0» — цепочка 1003→2701→2702→3E→рутина пройдёт сама.","ok");
+  } catch(e){ setConn("ошибка: "+e.message); try{ await disconnect(false); }catch(_){}}
+}
+async function disconnect(ui){ T.connected=false; T.keepAlive=false;
+  try{ if(T.reader) T.reader.cancel(); }catch(e){}
+  try{ if(T.writer){ T.writer.releaseLock(); } }catch(e){}
+  try{ if(T.port) await T.port.close(); }catch(e){}
+  T.port=null; if(ui) setConn("нет соединения"); enableBtns(false); }
+
+/* ===== keepalive 3E00 (держит сессию, защищает от S3-таймаута) ===== */
+function startKeepAlive(){ if(T.keepAlive) return; T.keepAlive=true;
+  (async function(){ while(T.keepAlive && T.connected){
+    if(!T.busy && !T.kaBusy){ T.kaBusy=true;
+      try{ await command("3E00",1200); log("  [keep] 3E00 → 7E00","ok"); }catch(e){ log("[keep] "+e.message,"err"); }
+      T.kaBusy=false; }
+    await sleep(2000); } })(); }
+
+/* ===== полуавтомат ADB ===== */
+async function adbRoutine(sub){
+  log("=== цепочка ADB → scos.adb.usb"+(sub==="01"?"1":sub==="03"?"0":"?")+" ");
+  log("[1/5] 10 03 — расширенная сессия");
+  var r=await uds("1003","5003");
+  log("[2/5] 27 01 — seed");
+  r=await uds("2701","6701");
+  var hex=r.slice(4,12);
+  log("  seed = "+hex);
+  var key=seed2key(hex);
+  log("[3/5] 27 02 — ключ "+key);
+  await uds("2702"+key,"6702");
+  startKeepAlive();
+  log("[4/5] 3E 00 — keepalive пошёл");
+  log("[5/5] 31 01 AE 65 "+sub+" — рутина ADB","tx");
+  r=await uds("3101AE65"+sub,"7101AE65");
+  log("$$$ УСПЕХ: 71 01 AE 65 00 — scos.adb.usb"+
+      (sub==="01"?"1":"0")+" включён. Ноут: dmesg ждёт 18d1:4ee7 / nc 10.1.0.79 5555","ok");
+}
+async function rollback(){ log("=== откат: 31 01 AE 65 00");
+  await uds("3101AE6500","7101AE65"); log("откат OK — ADB выключен","ok"); }
+async function vin(){ log("=== VIN (read-only)");
+  var r=await uds("22F190","62F190");
+  var vin=""; for(var i=6;i<r.length;i+=2) vin+=String.fromCharCode(parseInt(r.substr(i,2),16));
+  log("VIN: "+vin.trim(),"ok"); }
+
+function enableBtns(on){ for(var id of ["bAdb","bAdb1","bOff","bVin","bExit"])
+    document.getElementById(id).disabled=!on; }
+document.getElementById("bConn").onclick=connect;
+document.getElementById("bExit").onclick=async function(){ try{ await uds("1001","50"); log("сессия закрыта (1001)","ok"); }catch(e){ log(e.message,"err"); } await disconnect(true); };
+document.getElementById("bAdb").onclick =function(){ if(!T.busy) adbRoutine("03").catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
+document.getElementById("bAdb1").onclick=function(){ if(!T.busy) adbRoutine("01").catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
+document.getElementById("bOff").onclick =function(){ if(!T.busy) rollback().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
+document.getElementById("bVin").onclick =function(){ if(!T.busy) vin().catch(function(e){ log("ОШИБКА: "+e.message,"err"); }); };
+</script>
+</body>
+</html>
