@@ -200,7 +200,7 @@ async function connect(){
     for(var j=0;j<INIT_POST.length;j++){ await at(INIT_POST[j]); }
     setConn("онлайн · "+found+" · HS-CAN → 72B/7AB");
     enableBtns(true); log("○ "+BUILD,"ok");
-    log("подключено. Жми «ADB → usb0» — цепочка 1003→2701→2702→3E→рутина пройдёт сама.","ok");
+    log("подключено. Жми кнопку — цепочка 1003→2701→2702→3E→рутина пройдёт сама.","ok");
   } catch(e){ setConn("ошибка: "+e.message); try{ await disconnect(false); }catch(_){}}
 }
 async function disconnect(ui){ T.connected=false; T.keepAlive=false;
