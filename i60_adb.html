@@ -103,15 +103,22 @@ async function serialReadLoop(){ var dec=new TextDecoder();
 async function drainIdle(ms){ var t=Date.now()+ms, last=T.buf.length;
   while(Date.now()<t){ await sleep(60); if(T.buf.length!==last){ last=T.buf.length; t=Date.now()+ms; } }
   var out=T.buf; T.buf=""; return out; }
-async function command(txt,timeout){ if(T.busy) throw new Error("шлюз занят");
-  T.busy=true;
-  try { await drainIdle(80); T.buf="";
-    await T.writer.write(new TextEncoder().encode(txt+"\r"));
-    var t0=Date.now();
-    while(Date.now()-t0 < (timeout||3000)){ await sleep(50);
-      if(/>/.test(T.buf.trim().slice(-1))) break; }
-    var out=T.buf; T.buf=""; return out;
-  } finally { T.busy=false; } }
+/* шлюз — FIFO-очередь: команды (рутина, keepalive, кнопки) сериализуются вместо
+   взаимных отказов «шлюз занят» (race 00:22:38: keepalive перехватил порт у рутины) */
+var G = Promise.resolve();
+function command(txt,timeout){
+  var run = async function(){
+    if(!T.connected) throw new Error("нет соединения");
+    T.busy=true;
+    try { await drainIdle(80); T.buf="";
+      await T.writer.write(new TextEncoder().encode(txt+"\r"));
+      var t0=Date.now();
+      while(Date.now()-t0 < (timeout||3000)){ await sleep(50);
+        if(/>/.test(T.buf.trim().slice(-1))) break; }
+      var out=T.buf; T.buf=""; return out;
+    } finally { T.busy=false; }
+  };
+  var p = G.then(run,run); G = p.catch(function(){}); return p; }
 function atOk(txt){ return /OK/.test(txt); }
 async function at(cmd,timeout){ var t=await command(cmd,timeout||2000); if(!atOk(t))
   throw new Error(cmd+": ожидался OK, получено '"+t.trim().replace(/\s+/g," ")+"'"); }
