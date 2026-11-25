@@ -130,10 +130,18 @@ function decodeUds(txt){ var out="", lines=txt.split(/[\r\n]+/);
     else if(t0.charAt(0)==="0"){ toks=toks.slice(1); } // SF PCI 0x0x (если ELM напечатал с нулём)
     else if(t0.charAt(0)==="1"){ toks=toks.slice(2); } // FirstFrame: PCI 10 LL (2 байта)
     else if(t0.charAt(0)==="2"){ toks=toks.slice(1); } // ConsecutiveFrame: PCI 2x (1 байт)
+    //   SF с одноразрядным PCI («8») — PCI уже выпал из парного матча, toks[0] = SID
+    if(toks[0]==="7F" && toks[2]==="78"){ continue; } // NRC 0x78 responsePending — ждём финал
     out+=toks.join("").toUpperCase(); }
   return out; }
 async function uds(payload,expect){ var t=await command(payload.toUpperCase(),4000);
   var d=decodeUds(t);
+  // NRC 0x78 (responsePending): HU ещё считает — дожидаемся финального ответа
+  for(var g=0; g<15 && (d==="" || (d.indexOf("7F")===0 && d.substr(4,2)==="78")); g++){
+    log("  … NRC 0x78 (в обработке), жду финальный ответ","tx");
+    await sleep(500);
+    t=await drainIdle(2500);
+    var m=decodeUds(t); if(m) d=m; }
   log("  -> "+(d||"(пусто)"), d.indexOf("7F")===0 ? "err" : "ok");
   if(d.indexOf("7F")===0) throw new Error(payload+": 7F "+d.slice(4)+"");
   if(expect && d.indexOf(expect.toUpperCase())!==0)
