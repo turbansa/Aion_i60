@@ -10,7 +10,8 @@ body { background:var(--bg); color:var(--fg); font:14px/1.5 ui-monospace,monospa
 button { font:inherit; padding:8px 14px; margin:4px 4px 4px 0; border:1px solid #3a4250;
          background:#1d222b; color:var(--fg); border-radius:8px; }
 button.primary { background:#23405e; border-color:#3d6aa0; }
-button.danger  { background:#5e2323; border-color:#a03d3d; }
+button.warn    { background:#57491a; border-color:#a8923d; color:#f2e5ab; }
+button.danger  { background:#5e2323; border-color:#a03d3d; color:#f4c9c9; }
 button:disabled { opacity:0.4; }
 #log { background:#0d1014; border:1px solid #2a3140; border-radius:8px; padding:10px;
        height:52vh; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin-top:8px; }
@@ -22,11 +23,15 @@ button:disabled { opacity:0.4; }
 <body>
 <div id="conn">нет соединения</div>
 <div class="row">
-  <button id="bConn" class="primary">Подключить адаптер</button>
-  <button id="bAdb"  class="primary" disabled>ADB → usb0 (AE65&nbsp;03)</button>
-  <button id="bAdb1" disabled>ADB → usb1 (AE65&nbsp;01)</button>
-  <button id="bOff"  class="danger" disabled>Откат (AE65&nbsp;00)</button>
-  <button id="bVin"  disabled>VIN (read-only)</button>
+  <button id="bConn" class="warn">Подключить адаптер</button>
+  <button id="bVin"  class="warn" disabled>VIN (read-only)</button>
+</div>
+<div class="row">
+  <button id="bAdb"  class="danger" disabled>ADB → usb0 (AE65&nbsp;03)</button>
+  <button id="bAdb1" class="danger" disabled>ADB → usb1 (AE65&nbsp;01)</button>
+</div>
+<div class="row">
+  <button id="bOff"  disabled>ADB → off (AE65&nbsp;00)</button>
   <button id="bExit" disabled>Выйти из сессии (1001)</button>
 </div>
 <div id="log"></div>
@@ -110,12 +115,22 @@ async function command(txt,timeout){ if(T.busy) throw new Error("шлюз зан
 function atOk(txt){ return /OK/.test(txt); }
 async function at(cmd,timeout){ var t=await command(cmd,timeout||2000); if(!atOk(t))
   throw new Error(cmd+": ожидался OK, получено '"+t.trim().replace(/\s+/g," ")+"'"); }
-// собираем UDS-ответ: выбрасываем заголовки/мусор, склеиваем hex
+// собираем UDS-ответ: выбрасываем заголовки/мусор, разбираем ISO-TP PCI, склеиваем hex
+//  (SF: PCI одиночным разрядом («8») выпадает из парного матчинга — ок;
+//   FF: первый токен «10»…«1F» → съедаем 2 байта PCI; CF: «20»…«2F» → 1 байт; FC: пропуск строки)
+//  Ответы HU в этой странице начинаются с SID 50/62/67/71/7E — коллизий с PCI 1x/2x нет.
 function decodeUds(txt){ var out="", lines=txt.split(/[\r\n]+/);
   for(var i=0;i<lines.length;i++){ var ln=lines[i].replace(/>/g,"").trim(); if(!ln) continue;
     if(/^AT|^SEARCH|^BUS|NO DATA|CAN ERROR|UNABLE|STOPPED|ERROR|\?$|^OK$/.test(ln)) continue;
     ln=ln.replace(/^[0-9A-F]{3}[:\s]*/,"");           // заголовок 7AB / 07AB
-    var toks=ln.match(/[0-9A-Fa-f]{2}/g); if(toks) out+=toks.join("").toUpperCase(); }
+    var toks=ln.match(/[0-9A-Fa-f]{2}/g); if(!toks) continue;
+    toks=toks.map(function(x){ return x.toUpperCase(); });
+    var t0=toks[0];
+    if(t0.charAt(0)==="3"){ continue; }                // FlowControl — не данные
+    else if(t0.charAt(0)==="0"){ toks=toks.slice(1); } // SF PCI 0x0x (если ELM напечатал с нулём)
+    else if(t0.charAt(0)==="1"){ toks=toks.slice(2); } // FirstFrame: PCI 10 LL (2 байта)
+    else if(t0.charAt(0)==="2"){ toks=toks.slice(1); } // ConsecutiveFrame: PCI 2x (1 байт)
+    out+=toks.join("").toUpperCase(); }
   return out; }
 async function uds(payload,expect){ var t=await command(payload.toUpperCase(),4000);
   var d=decodeUds(t);
