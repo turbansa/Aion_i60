@@ -143,10 +143,20 @@ async function uds(payload,expect){ var t=await command(payload.toUpperCase(),40
     t=await drainIdle(2500);
     var m=decodeUds(t); if(m) d=m; }
   log("  -> "+(d||"(пусто)"), d.indexOf("7F")===0 ? "err" : "ok");
-  if(d.indexOf("7F")===0) throw new Error(payload+": 7F "+d.slice(4)+"");
+  if(d.indexOf("7F")===0){ var nr=d.slice(4,6); var nm=NRC[nr]?" = "+NRC[nr]:"";
+    throw new Error(payload+": отказ 7F "+nr+nm); }
   if(expect && d.indexOf(expect.toUpperCase())!==0)
     throw new Error(payload+": ожидался "+expect+", получен "+(d||"(пусто)"));
   return d; }
+
+/* расшифровка NRC (ISO 14229) — печатается в логе при отказе */
+const NRC = {"10":"generalReject","11":"serviceNotSupported","12":"subFunctionNotSupported",
+  "13":"incorrectMessageLengthOrInvalidFormat","14":"responseTooLong",
+  "22":"conditionsNotCorrect","24":"requestSequenceError",
+  "31":"requestOutOfRange","33":"securityAccessDenied","35":"invalidKey",
+  "36":"exceedNumberOfAttempts","37":"requiredTimeDelayNotExpired",
+  "72":"generalProgrammingFailure","78":"responsePending",
+  "7F":"serviceNotSupportedInActiveSession"};
 
 const INIT_PRE = ["ATE0","ATL0","ATH1","ATS1","ATR1","ATM0"];
 const INIT_POST = ["ATSH72B","ATCRA7AB","ATFCSH72B","ATFCSD300014","ATFCSM1"];
@@ -212,7 +222,12 @@ async function adbRoutine(sub){
       (sub==="01"?"1":"0")+" включён. Ноут: dmesg ждёт 18d1:4ee7 / nc 10.1.0.79 5555","ok");
 }
 async function rollback(){ log("=== откат: 31 01 AE 65 00");
-  await uds("3101AE6500","7101AE65"); log("откат OK — ADB выключен","ok"); }
+  try{ await uds("3101AE6500","7101AE65"); log("откат OK — ADB выключен","ok"); }
+  catch(e){ if(/7F 7F/.test(e.message)){
+      log("NRC 7F: sub 00 не доступна в активной сессии (в этой прошивке завод, похоже, не дал off-рутину).",
+          "err");
+      log("Это НЕ страшно: ADB-пропы non-persistent — выключи зажигание на 1–2 мин, ADB закроется сам.","ok");
+    } else throw e; } }
 async function vin(){ log("=== VIN (read-only)");
   var r=await uds("22F190","62F190");
   var vin=""; for(var i=6;i<r.length;i+=2) vin+=String.fromCharCode(parseInt(r.substr(i,2),16));
