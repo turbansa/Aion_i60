@@ -112,7 +112,7 @@ async function drainIdle(ms){ var t=Date.now()+ms, last=T.buf.length;
   var out=T.buf; T.buf=""; return out; }
 /* BUILD-ID — печатается в лог при подключении, чтобы точно знать, какая версия
    кода открыта в браузере (Pages кэширует до 10 мин — смотри этот тег при сомнениях) */
-const BUILD = "build 0dc43a4 · i60.html: VIN + инженерка (2B 00) + USB_Update (AEB1) + ADB on/off (AE65 01/00) — кнопки возвращены";
+const BUILD = "build a3519fd · i60.html: VIN + инженерка (2B 00) + USB_Update (AEB1) + ADB on/off (AE65 01/00); AE65-параметр = значение scos.adb.usb1";
 /* шлюз — FIFO-очередь: команды (рутина, keepalive, кнопки) сериализуются вместо
    взаимных отказов «шлюз занят» (race 00:22:38: keepalive перехватил порт у рутины) */
 var G = Promise.resolve();
