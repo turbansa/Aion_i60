@@ -27,8 +27,8 @@ button:disabled { opacity:0.4; }
   <button id="bVin"  class="warn" disabled>VIN (read-only)</button>
 </div>
 <div class="row">
-  <button id="bAdb"  class="danger" disabled>ADB → usb0 (AE65&nbsp;03)</button>
-  <button id="bAdb1" class="danger" disabled>ADB → usb1 (AE65&nbsp;01)</button>
+  <button id="bAdb"  class="danger" disabled>ADB → usb1=3 (AE65&nbsp;03)</button>
+  <button id="bAdb1" class="danger" disabled>ADB → usb1=1 (AE65&nbsp;01)</button>
 </div>
 <div class="row">
   <button id="bOff"  disabled>ADB → off (AE65&nbsp;00)</button>
@@ -219,7 +219,10 @@ function startKeepAlive(){ if(T.keepAlive) return; T.keepAlive=true;
 
 /* ===== полуавтомат ADB ===== */
 async function adbRoutine(sub){
-  log("=== цепочка ADB → scos.adb.usb"+(sub==="01"?"1":sub==="03"?"0":"?")+" ");
+  /* diag_impl: ЛЮБАЯ подфункция делает property_set("scos.adb.usb1", "<sub>"):
+     00="0", 01="1", 02="2", 03="3". Писателя scos.adb.usb0 через UDS нет —
+     этот проп пишет только свитч в KitchenSink (DebugFragment). */
+  log("=== цепочка ADB → property_set(\"scos.adb.usb1\", \""+(+sub)+"\") ");
   log("[1/5] 10 03 — расширенная сессия");
   var r=await uds("1003","5003");
   log("[2/5] 27 01 — seed");
@@ -233,8 +236,7 @@ async function adbRoutine(sub){
   log("[4/5] 3E 00 — keepalive пошёл");
   log("[5/5] 31 01 AE 65 "+sub+" — рутина ADB","tx");
   r=await uds("3101AE65"+sub,"7101AE65");
-  log("$$$ УСПЕХ: 71 01 AE 65 00 — scos.adb.usb"+
-      (sub==="01"?"1":"0")+" включён. Ноут: dmesg ждёт 18d1:4ee7 / nc 10.1.0.79 5555","ok");
+  log("$$$ УСПЕХ: 71 01 AE 65 00 — scos.adb.usb1=\""+(+sub)+"\" записан. Ноут: dmesg ждёт 18d1:4ee7 / nc 10.1.0.79 5555","ok");
 }
 async function rollback(){
   /* как в заводском сценарии (bz3x-лог 00:12): выключение — ТОЖЕ полная цепочка
