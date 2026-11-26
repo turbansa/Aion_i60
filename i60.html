@@ -112,7 +112,7 @@ async function drainIdle(ms){ var t=Date.now()+ms, last=T.buf.length;
   var out=T.buf; T.buf=""; return out; }
 /* BUILD-ID — печатается в лог при подключении, чтобы точно знать, какая версия
    кода открыта в браузере (Pages кэширует до 10 мин — смотри этот тег при сомнениях) */
-const BUILD = "build 475cea7 · порядок кнопок: conn+VIN / инженерка / AEB1 / ADB on / ADB off / выход";
+const BUILD = "build 70ed458 · сетка 4×2: conn+VIN / инженерка+AEB1 / ADB вкл+выкл / выход";
 /* шлюз — FIFO-очередь: команды (рутина, keepalive, кнопки) сериализуются вместо
    взаимных отказов «шлюз занят» (race 00:22:38: keepalive перехватил порт у рутины) */
 var G = Promise.resolve();
