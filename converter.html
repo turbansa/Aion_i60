@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Конвертер OTP-секрета (Base64 → Base32)</title>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --border: #cbd5e1;
+      --success: #16a34a;
+      --error: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      background: var(--card);
+      width: 100%;
+      max-width: 680px;
+      padding: 28px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+    }
+    p.subtitle {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: normal;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: var(--primary-hover); }
+    button.secondary {
+      background: #e2e8f0;
+      color: var(--text);
+    }
+    button.secondary:hover { background: #cbd5e1; }
+    .output-group {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .output-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .status {
+      font-size: 13px;
+      margin-top: 8px;
+      min-height: 18px;
+    }
+    .status.error { color: var(--error); }
+    .status.success { color: var(--success); }
+    .note {
+      margin-top: 18px;
+      padding: 12px;
+      background: #f8fafc;
+      border-left: 3px solid var(--primary);
+      font-size: 13px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Конвертер OTP-секрета</h1>
+  <p class="subtitle">Извлекает параметр <code>secret</code> из ссылки <code>otpauth://</code> и переводит его из Base64 в Base32.</p>
+
+  <label for="inputUrl">Ссылка otpauth:// или строка Base64:</label>
+  <textarea id="inputUrl" rows="5" placeholder="Вставьте ссылку вида otpauth://totp/...?secret=..."></textarea>
+
+  <div class="controls">
+    <label class="checkbox-label">
+      <input type="checkbox" id="stripPadding" checked>
+      Удалять знаки «=» в конце (рекомендуется для приложений)
+    </label>
+    <button onclick="convert()">Конвертировать</button>
+  </div>
+
+  <div class="output-group">
+    <div class="output-header">
+      <label for="outputKey" style="margin:0;">Ключ в формате Base32:</label>
+      <button class="secondary" onclick="copyResult()">Копировать</button>
+    </div>
+    <textarea id="outputKey" rows="4" readonly placeholder="Здесь появится результат..."></textarea>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="note">
+    <strong>Безопасность:</strong> Вся обработка выполняется локально в вашем браузере на JavaScript. Данные не передаются на сервер.
+  </div>
+</div>
+
+<script>
+  function base64ToBytes(base64) {
+    // Очищаем от пробелов и переносов строк, поддерживаем URL-safe Base64
+    const clean = base64.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+    const binaryString = atob(clean);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  function bytesToBase32(bytes, stripPadding) {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0;
+    let value = 0;
+    let output = '';
+
+    for (let i = 0; i < bytes.length; i++) {
+      value = (value << 8) | bytes[i];
+      bits += 8;
+      while (bits >= 5) {
+        output += alphabet[(value >>> (bits - 5)) & 31];
+        bits -= 5;
+      }
+    }
+
+    if (bits > 0) {
+      output += alphabet[(value << (5 - bits)) & 31];
+    }
+
+    if (!stripPadding) {
+      while (output.length % 8 !== 0) {
+        output += '=';
+      }
+    }
+
+    return output;
+  }
+
+  function setStatus(message, type) {
+    const el = document.getElementById('status');
+    el.textContent = message;
+    el.className = 'status ' + (type || '');
+  }
+
+  function convert() {
+    const rawInput = document.getElementById('inputUrl').value.trim();
+    const stripPadding = document.getElementById('stripPadding').checked;
+    const outputEl = document.getElementById('outputKey');
+
+    if (!rawInput) {
+      setStatus('Введите ссылку или строку Base64.', 'error');
+      outputEl.value = '';
+      return;
+    }
+
+    try {
+      let base64Secret = rawInput;
+
+      // Если вставлена полная ссылка otpauth:// или URL с параметром secret
+      if (rawInput.includes('secret=')) {
+        const queryPart = rawInput.includes('?') ? rawInput.split('?')[1] : rawInput;
+        const params = new URLSearchParams(queryPart);
+        const extracted = params.get('secret');
+        if (!extracted) {
+          throw new Error('Параметр secret не найден.');
+        }
+        base64Secret = extracted;
+      }
+
+      const bytes = base64ToBytes(base64Secret);
+      const base32 = bytesToBase32(bytes, stripPadding);
+
+      outputEl.value = base32;
+      setStatus(`Готово. Длина ключа: ${bytes.length} байт (${base32.length} символов).`, 'success');
+    } catch (e) {
+      outputEl.value = '';
+      setStatus('Ошибка декодирования: проверьте корректность ссылки или Base64-строки.', 'error');
+    }
+  }
+
+  function copyResult() {
+    const outputEl = document.getElementById('outputKey');
+    if (!outputEl.value) return;
+
+    navigator.clipboard.writeText(outputEl.value).then(() => {
+      setStatus('Ключ скопирован в буфер обмена.', 'success');
+    });
+  }
+</script>
+
+</body>
+</html>
