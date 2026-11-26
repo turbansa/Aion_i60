@@ -27,12 +27,12 @@ button:disabled { opacity:0.4; }
   <button id="bVin"  class="warn" disabled>VIN (read-only)</button>
 </div>
 <div class="row">
-  <button id="bMenu" class="danger" disabled>Инженерное меню (2B&nbsp;00)</button>
+  <button id="bMenu" class="danger" disabled>Инж. меню (2B&nbsp;00)</button>
   <button id="bUsb"  class="danger" disabled>USB_Update (AEB1&nbsp;01)</button>
 </div>
 <div class="row">
-  <button id="bAdb1" class="danger" disabled>ADB → включить (AE65&nbsp;01)</button>
-  <button id="bOff"  class="danger" disabled>ADB → выключить (AE65&nbsp;00)</button>
+  <button id="bAdb1" class="danger" disabled>ADB вкл (AE65&nbsp;01)</button>
+  <button id="bOff"  class="danger" disabled>ADB выкл (AE65&nbsp;00)</button>
 </div>
 <div class="row">
   <button id="bExit" disabled>Выйти из сессии (1001)</button>
@@ -108,7 +108,7 @@ async function drainIdle(ms){ var t=Date.now()+ms, last=T.buf.length;
   var out=T.buf; T.buf=""; return out; }
 /* BUILD-ID — печатается в лог при подключении, чтобы точно знать, какая версия
    кода открыта в браузере (Pages кэширует до 10 мин — смотри этот тег при сомнениях) */
-const BUILD = "build 6faaedf · сетка 4×2: conn+VIN / инженерка+AEB1 / ADB вкл+выкл / выход";
+const BUILD = "build a7fc4b4 · короткие подписи: Инж. меню / ADB вкл / ADB выкл";
 /* шлюз — FIFO-очередь: команды (рутина, keepalive, кнопки) сериализуются вместо
    взаимных отказов «шлюз занят» (race 00:22:38: keepalive перехватил порт у рутины) */
 var G = Promise.resolve();
